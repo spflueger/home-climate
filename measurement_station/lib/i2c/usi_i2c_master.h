@@ -52,16 +52,6 @@
 #endif
 
 //USI I2C Master Transceiver Start
-// Starts the transceiver to send or receive data based on the r/w bit
-
-// char USI_I2C_Master_Transceiver_Start(char *msg, char msg_size);
-#ifdef __cplusplus
-extern "C" {
-#endif
 char USI_I2C_Master_Start_Transmission(char *msg, char msg_size);
 
-#ifdef __cplusplus
-}
-#endif
-// char USI_I2C_Master_Start_Transmission(char *msg, char msg_size);
 #endif
