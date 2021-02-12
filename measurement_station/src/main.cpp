@@ -14,17 +14,44 @@
 
 RH_ASK rh_driver(RH_SPEED, RH_RX_PIN, RH_TX_PIN, RH_PTT_PIN);
 
-String sC;
-char msg[6] = "\x80\x02\x10\x00";
+void initialize_hdc1080_sensor() {
+  // first byte is hdc1080 address + LSB = 0 (LSB is read or write direction)
+  uint8_t init_msg[3];
+  init_msg[0] = 0x02;
+  init_msg[1] = 0x10;
+  init_msg[2] = 0x00;
+  i2c_send(0x40, init_msg, 3);
+}
+
+struct ClimateData {
+  float temperature;
+  float humidity;
+};
+
+ClimateData data;
+
+ClimateData make_measurement() {
+  // trigger a measurement
+  const uint8_t trigger_msg(0x00);
+  i2c_send(0x40, &trigger_msg, 1);
+
+  // datasheet: 14 bit measurements take about 6ms + 6ms -> 20ms
+  delay(20);
+
+  // receive the temperature and humidity:
+  // 1 address byte + 2 byte temperature + 2 byte humidity
+  uint8_t msg[4];
+  i2c_receive(0x40, msg, 4);
+
+  uint16_t temp = (msg[0] << 8) + msg[1];
+  uint16_t hum = (msg[2] << 8) + msg[3];
+
+  data.temperature = ((float)temp / 65536) * 165 - 40;
+  data.humidity = ((float)hum / 65536) * 100;
+}
 
 void setup() {
-  // I2C
-  // unsigned char* msg[] = {0x81, 0x02, 0x10, 0x00}; // write the config
-  // register adr 2 with bit 12 on
-
-  //  sC = "\x80\x02\x10\x00";
-
-  USI_I2C_Master_Start_Transmission(msg, '\x04');
+  initialize_hdc1080_sensor();
 
   // init RadioHead
   if (!rh_driver.init()) {
@@ -32,42 +59,12 @@ void setup() {
   }
 }
 
-// main loop
 void loop() {
-  // char msg[]= "\x80\x00\x00\x00";
-  msg[0] = '\x80';
-  msg[1] = '\x00';
-  msg[2] = '\x00';
-  msg[3] = '\x00';
-  USI_I2C_Master_Start_Transmission(msg, '\x2');
-  // sC = "\x80\x01\x00\x00"; // write Temp register to start measurement
-
-  // msg[1]= '\x01';
-  // USI_I2C_Master_Start_Transmission(  msg, '\x2');
-
-  delay(1000);
-
-  struct ClimateData {
-    float h;
-    float t;
-  };
-
-  ClimateData data = ClimateData();
-
-  msg[0] = '\x81'; // read the temp and humidity
-  USI_I2C_Master_Start_Transmission(msg, '\x5');
-
-  uint16_t temp;
-  temp = (msg[1] << 8) + msg[2];
-  data.t = ((float)temp / 65536) * 165 - 40;
-
-  uint16_t hum = (msg[3] << 8) + msg[4];
-  data.h = ((float)hum / 65536) * 100;
+  ClimateData data(make_measurement());
 
   rh_driver.send((uint8_t *)&data, sizeof(data));
 
-  // rh_driver.send((uint8_t *)msg, strlen(msg));
   rh_driver.waitPacketSent();
 
-  // delay(1000);
+  delay(1000);
 }

@@ -49,7 +49,10 @@
 #define PIN_USI_SCL PINB7
 #endif
 
-// USI I2C Master Transceiver Start
-char USI_I2C_Master_Start_Transmission(char *msg, char msg_size);
+uint8_t i2c_send(const uint8_t address, const uint8_t *message_buffer,
+                 uint8_t bytes_to_send);
+
+void i2c_receive(const uint8_t address, uint8_t *message_buffer,
+                 uint8_t bytes_to_receive);
 
 #endif
