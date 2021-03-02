@@ -1,7 +1,7 @@
 
 #include <Arduino.h>
-#include <usi_i2c_master.h>
 
+#include "hdc1080_driver.hpp"
 #include <RH_ASK.h>
 
 // RadioHead bitrate in bit/s
@@ -13,58 +13,52 @@
 #define RH_PTT_PIN 10 // not used, set to a non-existens pin
 
 RH_ASK rh_driver(RH_SPEED, RH_RX_PIN, RH_TX_PIN, RH_PTT_PIN);
+HDC1080I2CDriver hdc1080;
 
-void initialize_hdc1080_sensor() {
-  // first byte is hdc1080 address + LSB = 0 (LSB is read or write direction)
-  uint8_t init_msg[3];
-  init_msg[0] = 0x02;
-  init_msg[1] = 0x10;
-  init_msg[2] = 0x00;
-  i2c_send(0x40, init_msg, 3);
-}
+extern uint8_t _end;
+extern uint8_t __stack;
 
-struct ClimateData {
-  float temperature;
-  float humidity;
-};
+#define STACK_CANARY 0xc5;
 
-ClimateData data;
+void StackPaint(void) __attribute__((naked)) __attribute__((optimize("O0")))
+__attribute__((section(".init1")));
 
-ClimateData make_measurement() {
-  // trigger a measurement
-  const uint8_t trigger_msg(0x00);
-  i2c_send(0x40, &trigger_msg, 1);
+void StackPaint(void) {
+#if 0
+  uint8_t *p = &_end;
 
-  // datasheet: 14 bit measurements take about 6ms + 6ms -> 20ms
-  delay(20);
-
-  // receive the temperature and humidity:
-  // 1 address byte + 2 byte temperature + 2 byte humidity
-  uint8_t msg[4];
-  i2c_receive(0x40, msg, 4);
-
-  uint16_t temp = (msg[0] << 8) + msg[1];
-  uint16_t hum = (msg[2] << 8) + msg[3];
-
-  data.temperature = ((float)temp / 65536) * 165 - 40;
-  data.humidity = ((float)hum / 65536) * 100;
+  while (p <= &__stack) {
+    *p = STACK_CANARY;
+    p++;
+  }
+#else
+  __asm volatile("    ldi r30,lo8(_end)\n"
+                 "    ldi r31,hi8(_end)\n"
+                 "    ldi r24,lo8(0xc5)\n" /* STACK_CANARY = 0xc5 */
+                 "    ldi r25,hi8(__stack)\n"
+                 "    rjmp .cmp\n"
+                 ".loop:\n"
+                 "    st Z+,r24\n"
+                 ".cmp:\n"
+                 "    cpi r30,lo8(__stack)\n"
+                 "    cpc r31,r25\n"
+                 "    brlo .loop\n"
+                 "    breq .loop" ::);
+#endif
 }
 
 void setup() {
-  initialize_hdc1080_sensor();
+  hdc1080.init();
 
-  // init RadioHead
   if (!rh_driver.init()) {
     // do something in case init failed
   }
 }
 
 void loop() {
-  ClimateData data(make_measurement());
+  ClimateData data = hdc1080.measure();
 
   rh_driver.send((uint8_t *)&data, sizeof(data));
-
   rh_driver.waitPacketSent();
-
   delay(1000);
 }
