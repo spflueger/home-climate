@@ -27,8 +27,8 @@ HDC1080I2CDriver hdc1080;
 extern uint8_t _end;
 extern uint8_t __stack;
 
-#define STACK_CANARY 0xc5;
-
+// static const uint8_t STACK_CANARY = 0xC5;
+#define STACK_CANARY 0xC5
 void StackPaint(void) __attribute__((naked)) __attribute__((optimize("O0")))
 __attribute__((section(".init1")));
 
@@ -52,7 +52,7 @@ void StackPaint(void) {
                  "    cpi r30,lo8(__stack)\n"
                  "    cpc r31,r25\n"
                  "    brlo .loop\n"
-                 "    breq .loop" ::);
+                 "    breq .loop");
 #endif
 }
 
@@ -96,6 +96,18 @@ void enterSleep(void) {
   sleep_disable();
 }
 
+uint16_t stack_free_size(void) {
+  const uint8_t *p = &_end;
+  uint16_t c = 0;
+
+  while (*p == STACK_CANARY && p <= &__stack) {
+    p++;
+    c++;
+  }
+
+  return c;
+}
+
 void setup() {
   hdc1080.init();
 
@@ -108,6 +120,8 @@ void setup() {
 
 void loop() {
   ClimateData data = hdc1080.measure();
+
+  data.humidity = (float)stack_free_size();
 
   rh_driver.send((uint8_t *)&data, sizeof(data));
   rh_driver.waitPacketSent();

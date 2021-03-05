@@ -1,8 +1,8 @@
 #include <Arduino.h>
 
 struct ClimateData {
-  float humidity;
   float temperature;
+  float humidity;
 };
 
 class HDC1080I2CDriver {

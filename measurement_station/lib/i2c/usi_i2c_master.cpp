@@ -155,7 +155,6 @@ uint8_t i2c_send(const uint8_t address, const uint8_t *message_buffer,
 
 void i2c_receive(const uint8_t address, uint8_t *message_buffer,
                  uint8_t bytes_to_receive) {
-  uint8_t *p_msg = &message_buffer[0];
   create_start_condition();
 
   send_byte((address << 1) | 0x01);
@@ -167,7 +166,7 @@ void i2c_receive(const uint8_t address, uint8_t *message_buffer,
     ///////////////////////////////////////////////////////////////////
     USI_SET_SDA_INPUT();
 
-    *p_msg = USI_I2C_Master_Transfer(USISR_TRANSFER_8_BIT);
+    *message_buffer = USI_I2C_Master_Transfer(USISR_TRANSFER_8_BIT);
 
     USI_SET_SDA_OUTPUT();
 
@@ -178,7 +177,7 @@ void i2c_receive(const uint8_t address, uint8_t *message_buffer,
     }
 
     USI_I2C_Master_Transfer(USISR_TRANSFER_1_BIT);
-    ++p_msg;
+    ++message_buffer;
   } while (--bytes_to_receive); // Do until all data is read/written
 
   send_stop_condition();
