@@ -78,20 +78,28 @@ uint16_t availableStackSize() {
 #endif
 
 void setupADC() {
-  ADMUX = (1 << REFS2) |  // Sets ref. voltage to 2.56V internal
-          (1 << REFS1) |  // Sets ref. voltage to 2.56V internal
-          (0 << REFS0) |  // Sets ref. voltage to 2.56V internal
-          (0 << MUX3) |   // use ADC2 for input (PB4), MUX bit 3
-          (0 << MUX2) |   // use ADC2 for input (PB4), MUX bit 2
-          (1 << MUX1) |   // use ADC2 for input (PB4), MUX bit 1
-          (0 << MUX0);    // use ADC2 for input (PB4), MUX bit 0
-  ADCSRA = (1 << ADEN) |  // enable ADC
-           (1 << ADPS2) | // set prescaler to 64, bit 2
-           (1 << ADPS1) | // set prescaler to 64, bit 1
-           (0 << ADPS0);  // set prescaler to 64, bit 0
+ // setup ADC
+                                       // set PB4 to input mode 
+  ADMUX = 1 << REFS2 | 1 << REFS1;     // internal 2,56V Aref is selected
+  ADMUX |=  1 << MUX1;                  // select ADC2 (PB4)
+  ADCSRA = 1<< ADEN;                    // enable ADC conversion
+  ADCSRA |= 1 << ADPS2  | 1 << ADPS1;  // set ADC prescalar to 64 that 8E6/64 < 200 kHz
 
-  // disable ADC for powersaving
-  ADCSRA &= ~(1 << ADEN);
+
+  // ADMUX = (1 << REFS2) |  // Sets ref. voltage to 2.56V internal
+  //         (1 << REFS1) |  // Sets ref. voltage to 2.56V internal
+  //         (0 << REFS0) |  // Sets ref. voltage to 2.56V internal
+  //         (0 << MUX3) |   // use ADC2 for input (PB4), MUX bit 3
+  //         (0 << MUX2) |   // use ADC2 for input (PB4), MUX bit 2
+  //         (1 << MUX1) |   // use ADC2 for input (PB4), MUX bit 1
+  //         (0 << MUX0);    // use ADC2 for input (PB4), MUX bit 0
+  // ADCSRA = (1 << ADEN) |  // enable ADC
+  //          (1 << ADPS2) | // set prescaler to 64, bit 2
+  //          (1 << ADPS1) | // set prescaler to 64, bit 1
+  //          (0 << ADPS0);  // set prescaler to 64, bit 0
+
+  // // disable ADC for powersaving
+  // ADCSRA &= ~(1 << ADEN);
 
   // disable analog comperator for powersaving
   ACSR |= (1 << ACD);
@@ -137,39 +145,52 @@ void enterSleep(void) {
   sleep_disable();
 }
 
-uint8_t batteryLevel() {
+uint16_t batteryLevel() {
   // In order to have a low power battery measurement, a pin of the attiny (here
   // pin3/PB3) is used to output the battery voltage and serves as a on off
   // switch of the current through the voltage divider. turn on PB3
-  digitalWrite(PB3, HIGH);
 
-  // enable the ADC
-  ADCSRA |= (1 << ADEN);
 
-  delay(10);
-
-  ADCSRA |= (1 << ADSC); // start ADC measurement
-  while (ADCSRA & (1 << ADSC))
-    ; // wait till conversion complete
-
-  int16_t adc = ADCL & (ADCH << 8);
-
-  // clear the ADIF bit by writing 1 to it
-  ADCSRA |= (1 << ADIF);
-
-  // disable the ADC (power saving during power off state)
-  ADCSRA &= ~(1 << ADEN);
-  // turn off pin3
-  digitalWrite(PB3, LOW);
-
-  uint8_t battery_percentage = 100 * (adc - ADC_MIN) / (ADC_MAX - ADC_MIN);
-  if (adc > ADC_MAX) {
-    battery_percentage = 100;
-  } else if (adc < ADC_MIN) {
-    battery_percentage = 0;
-  }
-  return battery_percentage;
+  //  digitalWrite(PB3, HIGH);
+   PORTB |= (1 << PB3);     // set PB3 high
+   delay(50);
+   ADCSRA  |= 1 << ADSC;      // start conversion
+   delay(10);                  // wait 10             ms
+   
+  //  return (float) ADC * 2.56 / 1024;
+   PORTB &= ~(1 << PB3);    // sset PB3 LOw
+  // digitalWrite(PB3, LOW);
+   return(ADC);
 }
+  
+
+  // // enable the ADC
+  // ADCSRA |= (1 << ADEN);
+
+  // delay(10);
+
+  // ADCSRA |= (1 << ADSC); // start ADC measurement
+  // while (ADCSRA & (1 << ADSC))
+  //   ; // wait till conversion complete
+
+  // int16_t adc = ADCL & (ADCH << 8);
+
+  // // clear the ADIF bit by writing 1 to it
+  // ADCSRA |= (1 << ADIF);
+
+  // // disable the ADC (power saving during power off state)
+  // ADCSRA &= ~(1 << ADEN);
+  // // turn off pin3
+  // digitalWrite(PB3, LOW);
+
+  // uint8_t battery_percentage = 100 * (adc - ADC_MIN) / (ADC_MAX - ADC_MIN);
+  // if (adc > ADC_MAX) {
+  //   battery_percentage = 100;
+  // } else if (adc < ADC_MIN) {
+  //   battery_percentage = 0;
+  // }
+  // return battery_percentage;
+// }
 
 void setup() {
   hdc1080.init();
@@ -186,7 +207,7 @@ void setup() {
 
 struct DataPackage {
   ClimateData climate_data;
-  uint8_t battery_level;
+  uint16_t battery_level;
   uint8_t station_id;
 #if USE_STACK_COUNTING
   uint8_t available_stack_size;
@@ -196,7 +217,7 @@ struct DataPackage {
 void loop() {
   DataPackage data;
   data.climate_data = hdc1080.measure();
-  data.battery_level = batteryLevel();
+  data.battery_level =  batteryLevel() ;
   data.station_id = 33;
 #if USE_STACK_COUNTING
   data.available_stack_size = (uint8_t)availableStackSize();
@@ -213,5 +234,6 @@ void loop() {
 
 // watchdog ISR
 ISR(WDT_vect) {
+  WDTCR |= (1 << WDIE);
   // nothing to do here, just wake up
 }
