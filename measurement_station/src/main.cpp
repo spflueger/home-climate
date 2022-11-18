@@ -6,6 +6,8 @@
 #include "hdc1080_driver.hpp"
 #include <RH_ASK.h>
 
+#include <EEPROM.h>
+
 // for debugging purposes
 #define USE_STACK_COUNTING 0
 
@@ -22,11 +24,11 @@
 #define ADC_MAX 840 // ~2.1V (3*1.4V/2)
 
 // time until the watchdog wakes the mc in seconds
-#define WATCHDOG_TIME 2 // 1, 2, 4 or 8
+#define WATCHDOG_TIME 8 // 1, 2, 4 or 8
 
 // after how many watchdog wakeups we should collect and send the data
 #define WATCHDOG_WAKEUPS_TARGET                                                \
-  1 // 8 * 7 = 56 seconds between each data collection
+  7 // 8 * 7 = 56 seconds between each data collection
 
 // after how many loops the battery level should be refreshed
 #define BATTERY_LEVEL_UPDATE_THRESHOLD 1
@@ -161,6 +163,7 @@ uint8_t batteryLevel() {
   }
   return battery_percentage;
 }
+uint8_t id;
 
 void setup() {
   hdc1080.init();
@@ -173,6 +176,8 @@ void setup() {
   pinMode(PB3, OUTPUT);
   setupADC();
   enableWatchdog();
+  id = eeprom_read_byte((uint8_t*)0); // EEprom read address 0
+
 }
 
 struct DataPackage {
@@ -197,7 +202,7 @@ void loop() {
   DataPackage data;
   data.climate_data = hdc1080.measure();
   data.battery_level = battery_level;
-  data.station_id = 33;
+  data.station_id = id; // read from EEprom
 #if USE_STACK_COUNTING
   data.available_stack_size = (uint8_t)availableStackSize();
 #endif
@@ -207,6 +212,7 @@ void loop() {
 
   // deep sleep
   for (uint8_t i = 0; i < WATCHDOG_WAKEUPS_TARGET; i++) {
+    // hdc1080.measure(); // dummy measure to make better measurements
     enterSleep();
   }
 }
